@@ -3,6 +3,7 @@ import logging
 import re
 import typing as t
 import httpx
+import html
 from json import JSONDecodeError
 from re import sub
 from dotenv import load_dotenv
@@ -92,6 +93,7 @@ class MagalitterBot:
         board = post.get('board')
         sub = post.get('sub', '').strip()
         com = self.strip_html(post.get('com')).strip()[:150]  # Limit to 150 chars
+        com = html.unescape(com)
         url = f"{self.domain_name}/{board}/res/{post.get('no')}"
 
         if sub:
@@ -123,6 +125,12 @@ class MagalitterBot:
         if url:
             try:
                 img_url, title, description = get_og_tags(url)
+
+                if title:
+                    title = html.unescape(title)
+                if description:
+                    description = html.unescape(description)
+
                 if title and description:
                     thumb_blob = None
                     if img_url:
