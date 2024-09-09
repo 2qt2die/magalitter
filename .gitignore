@@ -1,3 +1,4 @@
 venv/
 tweeted_posts.txt
 .env
+__pycache__
