@@ -3,7 +3,7 @@ import typing as t
 import httpx
 import html
 import logging
-from atproto import models
+from atproto import Client, models
 
 # Regular expressions for parsing Open Graph tags
 _META_PATTERN = re.compile(r'<meta property="og:[^>]*>')
@@ -56,7 +56,7 @@ def create_hashtag_facet(message: str, hashtag_name: str) -> list:
         )
     ]
 
-def fetch_and_create_ogp_embed(url: str, bluesky_client: models.Client) -> t.Optional[models.AppBskyEmbedExternal.Main]:
+def fetch_and_create_ogp_embed(url: str, bluesky_client: Client) -> t.Optional[models.AppBskyEmbedExternal.Main]:
     """Fetch OGP data and create the embed for Bluesky."""
     try:
         img_url, title, description = get_og_tags(url)
