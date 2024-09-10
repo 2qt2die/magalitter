@@ -163,6 +163,8 @@ class MagalitterBot:
             logging.info("Twitter posting is disabled.")
             return
 
+        message += f"#{self.hashtag_name}"
+
         try:
             self.twitter_api.update_status(message)
             logging.info(f"Tweeted: {message}")
