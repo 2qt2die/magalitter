@@ -12,7 +12,7 @@ from atproto import Client, models
 from tweepy import OAuthHandler, API
 from tweepy.errors import TweepyException
 import warnings
-from helpers import get_og_tags
+from helpers import get_og_tags, create_hashtag_facet, fetch_and_create_ogp_embed
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.main")
 
@@ -110,46 +110,10 @@ class MagalitterBot:
             return
 
         embed = None
-        facets = []
-
-        hashtag = f"#{self.hashtag_name}"
-        message += f"{hashtag}"
-
-        message_bytes = message.encode('utf-8')
-        hashtag_bytes = hashtag.encode('utf-8')
-        hashtag_start = message_bytes.find(hashtag_bytes)
-        hashtag_end = hashtag_start + len(hashtag_bytes) 
-
-        facets.append(models.AppBskyRichtextFacet.Main(
-            index=models.AppBskyRichtextFacet.ByteSlice(byteStart=hashtag_start, byteEnd=hashtag_end),
-            features=[models.AppBskyRichtextFacet.Tag(tag=self.hashtag_name)]
-        ))
+        facets = create_hashtag_facet(message, self.hashtag_name)
 
         if url:
-            try:
-                img_url, title, description = get_og_tags(url)
-
-                if title:
-                    title = html.unescape(title)
-                if description:
-                    description = html.unescape(description)
-
-                if title and description:
-                    thumb_blob = None
-                    if img_url:
-                        img_data = httpx.get(img_url).content
-                        thumb_blob = self.bluesky_client.upload_blob(img_data).blob
-
-                    embed = models.AppBskyEmbedExternal.Main(
-                        external=models.AppBskyEmbedExternal.External(
-                            title=title,
-                            description=description,
-                            uri=url,
-                            thumb=thumb_blob
-                        )
-                    )
-            except Exception as e:
-                logging.error(f"Failed to fetch or embed OGP tags: {e}")
+            embed = fetch_and_create_ogp_embed(url, self.bluesky_client)
 
         try:
             self.bluesky_client.send_post(text=message, facets=facets, embed=embed)
