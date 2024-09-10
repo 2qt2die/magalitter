@@ -4,6 +4,7 @@ import re
 import typing as t
 import httpx
 import html
+import time
 from json import JSONDecodeError
 from re import sub
 from dotenv import load_dotenv
@@ -31,6 +32,8 @@ class MagalitterBot:
         self.url = os.getenv('BOARD_URL').format(domain=self.domain_name)
         self.post_format = os.getenv('POST_FORMAT', "New post on /{board}/: {sub} {com}...")
         self.hashtag_name = os.getenv('HASHTAG_NAME')
+        self.time_interval_hours = float(os.getenv('TIME_INTERVAL_HOURS', 3))
+        self.time_interval_seconds = self.time_interval_hours * 3600
         self.tweeted_post_file = 'tweeted_posts.txt'
 
         self.twitter_api = self.init_twitter() if self.enable_twitter else None
@@ -172,11 +175,18 @@ class MagalitterBot:
         tweeted_post_ids = self.get_tweeted_post_ids()
         first_posts = self.fetch_posts()
 
+        current_time = time.time()
+
         for post in first_posts:
             post_id = post.get('no')
+            post_time = post.get('time')
+
+            if current_time - post_time < self.time_interval_seconds:
+                logging.info(f"Thread #{post_id} is less than {self.time_interval_hours} hours old. Skipping.")
+                continue
 
             if post.get('sticky') == 1 or post.get('locked') == 1:
-                logging.info(f"Skipping post #{post_id}. Sticky: {post.get('sticky')}, Locked: {post.get('locked')}.")
+                logging.info(f"Skipping thread #{post_id}. Sticky: {post.get('sticky')}, Locked: {post.get('locked')}.")
                 continue
 
             if str(post_id) in tweeted_post_ids:
