@@ -5,6 +5,7 @@ import typing as t
 import httpx
 import html
 import time
+from logging.handlers import RotatingFileHandler
 from json import JSONDecodeError
 from re import sub
 from dotenv import load_dotenv
@@ -19,7 +20,11 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.main")
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    handlers=[
+        RotatingFileHandler("./log/magalitter_bot.log", maxBytes=5*1024*1024, backupCount=3),
+        logging.StreamHandler()
+    ]
 )
 
 class MagalitterBot:
