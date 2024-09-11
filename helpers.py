@@ -42,10 +42,9 @@ def get_og_tags(url: str) -> t.Tuple[t.Optional[str], t.Optional[str], t.Optiona
 def create_hashtag_facet(message: str, hashtag_name: str) -> list:
     """Create the hashtag facet for the message."""
     hashtag = f"#{hashtag_name}"
-    message += f"{hashtag}"
-
     message_bytes = message.encode('utf-8')
     hashtag_bytes = hashtag.encode('utf-8')
+
     hashtag_start = message_bytes.find(hashtag_bytes)
     hashtag_end = hashtag_start + len(hashtag_bytes)
 

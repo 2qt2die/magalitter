@@ -115,6 +115,9 @@ class MagalitterBot:
             return
 
         embed = None
+        hashtag = f"#{self.hashtag_name}"
+        message += f"{hashtag}"
+
         facets = create_hashtag_facet(message, self.hashtag_name)
 
         if url:
