@@ -13,7 +13,7 @@ from atproto import Client, models
 from tweepy import OAuthHandler, API
 from tweepy.errors import TweepyException
 import warnings
-from helpers import get_og_tags, create_hashtag_facet, fetch_and_create_ogp_embed
+from helpers import create_hashtag_facet, fetch_and_create_ogp_embed
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.main")
 
