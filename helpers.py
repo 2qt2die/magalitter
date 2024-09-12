@@ -55,22 +55,15 @@ def create_hashtag_facet(message: str, hashtag_name: str) -> list:
         )
     ]
 
-def fetch_and_create_ogp_embed(url: str, bluesky_client: Client) -> t.Optional[models.AppBskyEmbedExternal.Main]:
+def fetch_and_create_ogp_embed(url: str, bluesky_client: Client, fallback: str) -> t.Optional[models.AppBskyEmbedExternal.Main]:
     """Fetch OGP data and create the embed for Bluesky."""
     try:
         img_url, title, description = get_og_tags(url)
+        title, description = (html.unescape(title), html.unescape(description)) if title and description else (None, None)
 
-        if title:
-            title = html.unescape(title)
-        if description:
-            description = html.unescape(description)
+        thumb_blob = fetch_and_upload_image(url, img_url, fallback, bluesky_client)
 
         if title and description:
-            thumb_blob = None
-            if img_url:
-                img_data = httpx.get(img_url).content
-                thumb_blob = bluesky_client.upload_blob(img_data).blob
-
             return models.AppBskyEmbedExternal.Main(
                 external=models.AppBskyEmbedExternal.External(
                     title=title,
@@ -81,4 +74,38 @@ def fetch_and_create_ogp_embed(url: str, bluesky_client: Client) -> t.Optional[m
             )
     except Exception as e:
         logging.error(f"Failed to fetch or embed OGP tags: {e}")
-        return None
+
+    return None
+
+
+def fetch_and_upload_image(url: str, img_url: str, fallback: str, bluesky_client: Client) -> t.Optional[str]:
+    """Fetch image from URL or fallback and upload it to Bluesky."""
+    thumb_blob = None
+
+    if img_url:
+        try:
+            response = httpx.get(img_url)
+            response.raise_for_status()
+            thumb_blob = upload_image_to_bluesky(response.content, bluesky_client)
+        except (httpx.HTTPStatusError, httpx.RequestError) as http_err:
+            logging.warning(f"Error fetching image {img_url}: {http_err}")
+        except ValueError as val_err:
+            logging.error(f"Value error during image upload: {val_err}")
+        except Exception as img_error:
+            logging.error(f"Unexpected error processing image: {img_error}")
+
+    if not thumb_blob:
+        logging.info(f"Using fallback image for {url}.")
+        thumb_blob = upload_image_to_bluesky(httpx.get(fallback).content, bluesky_client)
+
+    return thumb_blob
+
+
+def upload_image_to_bluesky(img_data: bytes, bluesky_client: Client) -> t.Optional[str]:
+    """Upload image to Bluesky and return the blob."""
+    upload_response = bluesky_client.upload_blob(img_data)
+    thumb_blob = upload_response.blob
+    if not thumb_blob:
+        raise ValueError("Failed to upload image. No blob returned.")
+    logging.info(f"Uploaded blob: {thumb_blob}")
+    return thumb_blob

@@ -39,6 +39,7 @@ class MagalitterBot:
         self.hashtag_name = os.getenv('HASHTAG_NAME')
         self.time_interval_hours = float(os.getenv('TIME_INTERVAL_HOURS', 3))
         self.time_interval_seconds = self.time_interval_hours * 3600
+        self.fallback_image = os.getenv('FALLBACK_IMAGE').format(domain=self.domain_name)
         self.tweeted_post_file = 'tweeted_posts.txt'
 
         self.twitter_api = self.init_twitter() if self.enable_twitter else None
@@ -121,7 +122,7 @@ class MagalitterBot:
         facets = create_hashtag_facet(message, self.hashtag_name)
 
         if url:
-            embed = fetch_and_create_ogp_embed(url, self.bluesky_client)
+            embed = fetch_and_create_ogp_embed(url, self.bluesky_client, self.fallback_image)
 
         try:
             self.bluesky_client.send_post(text=message, facets=facets, embed=embed)
