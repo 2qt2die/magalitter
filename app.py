@@ -4,6 +4,7 @@ import typing as t
 import httpx
 import time
 from logging.handlers import RotatingFileHandler
+from atproto_client import exceptions as exceptions_at
 from json import JSONDecodeError
 from dotenv import load_dotenv
 from atproto import Client, models
@@ -61,6 +62,9 @@ class MagalitterBot:
             client.login(os.getenv('BLUESKY_HANDLE'), os.getenv('BLUESKY_PASSWORD'))
             logging.info("Bluesky client initialized successfully")
             return client
+        except exceptions_at.UnauthorizedError as e:
+            logging.error(f"Unauthorized error: Invalid identifier or password - {e}")
+            self.enable_bluesky = False
         except Exception as e:
             logging.error(f"Error initializing Bluesky client: {e}")
             raise
