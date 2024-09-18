@@ -1,19 +1,16 @@
 import os
 import logging
-import re
 import typing as t
 import httpx
-import html
 import time
 from logging.handlers import RotatingFileHandler
 from json import JSONDecodeError
-from re import sub
 from dotenv import load_dotenv
 from atproto import Client, models
 from tweepy import OAuthHandler, API
 from tweepy.errors import TweepyException
 import warnings
-from helpers import create_hashtag_facet, fetch_and_create_ogp_embed
+from helpers import HTMLCleaner, create_hashtag_facet, fetch_and_create_ogp_embed
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic.main")
 
@@ -94,15 +91,15 @@ class MagalitterBot:
             return []
 
     def strip_html(self, text: str) -> str:
-        """Remove HTML tags using regex."""
-        return sub(r'<[^>]*>', '', text)
+        """Remove HTML tags and handle <br> by adding a space."""
+        cleaner = HTMLCleaner()
+        return cleaner.clean_html(text)
 
     def format_message(self, post: dict) -> str:
         """Format the message using the template from the .env file."""
         board = post.get('board')
         sub = post.get('sub', '').strip()
         com = self.strip_html(post.get('com')).strip()[:150]  # Limit to 150 chars
-        com = html.unescape(com)
         url = f"{self.domain_name}/{board}/res/{post.get('no')}"
 
         if sub:

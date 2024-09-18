@@ -1,7 +1,8 @@
 import re
 import typing as t
 import httpx
-import html
+from html.parser import HTMLParser
+from html import unescape
 import logging
 from atproto import Client, models
 
@@ -59,7 +60,7 @@ def fetch_and_create_ogp_embed(url: str, bluesky_client: Client, fallback: str) 
     """Fetch OGP data and create the embed for Bluesky."""
     try:
         img_url, title, description = get_og_tags(url)
-        title, description = (html.unescape(title), html.unescape(description)) if title and description else (None, None)
+        title, description = (unescape(title), unescape(description)) if title and description else (None, None)
 
         thumb_blob = fetch_and_upload_image(url, img_url, fallback, bluesky_client)
 
@@ -109,3 +110,28 @@ def upload_image_to_bluesky(img_data: bytes, bluesky_client: Client) -> t.Option
         raise ValueError("Failed to upload image. No blob returned.")
     logging.info(f"Uploaded blob: {thumb_blob}")
     return thumb_blob
+
+class HTMLCleaner(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.fed = []
+
+    def handle_data(self, data):
+        """Collect the text data between tags."""
+        self.fed.append(data)
+
+    def handle_starttag(self, tag, attrs):
+        """Handle specific tags like <br>."""
+        if tag == 'br':
+            self.fed.append(' ')
+
+    def get_data(self):
+        """Return the cleaned text."""
+        return ''.join(self.fed)
+
+    def clean_html(self, text: str) -> str:
+        """Feed text into the parser and return cleaned data."""
+        self.feed(text)
+        cleaned_text = self.get_data()
+        return unescape(cleaned_text)
