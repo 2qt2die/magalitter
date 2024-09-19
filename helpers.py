@@ -87,7 +87,13 @@ def fetch_and_upload_image(url: str, img_url: str, fallback: str, bluesky_client
         try:
             response = httpx.get(img_url)
             response.raise_for_status()
-            thumb_blob = upload_image_to_bluesky(response.content, bluesky_client)
+            img_data = response.content
+
+            if len(img_data) > 976 * 1024:
+                logging.warning(f"Image size {len(img_data)} bytes exceeds the maximum allowed size. Using fallback image.")
+                img_data = None
+            else:
+                thumb_blob = upload_image_to_bluesky(response.content, bluesky_client)
         except (httpx.HTTPStatusError, httpx.RequestError) as http_err:
             logging.warning(f"Error fetching image {img_url}: {http_err}")
         except ValueError as val_err:
