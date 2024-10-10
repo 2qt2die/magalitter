@@ -114,7 +114,7 @@ class MagalitterBot:
         """Post the message to Bluesky, optionally with media or external resource."""
         if not self.enable_bluesky or not self.bluesky_client:
             logging.info("Bluesky posting is disabled.")
-            return
+            return True
 
         embed = None
         hashtag = f"#{self.hashtag_name}"
@@ -128,22 +128,34 @@ class MagalitterBot:
         try:
             self.bluesky_client.send_post(text=message, facets=facets, embed=embed)
             logging.info(f"Posted on Bluesky: {message}")
+            return True
         except Exception as e:
-            logging.error(f"Failed to post on Bluesky: {e}")
+            if isinstance(e.__cause__, ConnectionRefusedError) and e.__cause__.errno == 111:
+                logging.error(f"Error 111 occurred while posting to Bluesky: {e}")
+                return False
+            else:
+                logging.error(f"Failed to post on Bluesky: {e}")
+                return False 
 
     def post_to_twitter(self, message: str):
         """Post the message to Twitter."""
         if not self.enable_twitter or not self.twitter_api:
             logging.info("Twitter posting is disabled.")
-            return
+            return True
 
         message += f"#{self.hashtag_name}"
 
         try:
             self.twitter_api.update_status(message)
             logging.info(f"Tweeted: {message}")
+            return True
         except TweepyException as e:
-            logging.error(f"Failed to tweet: {e}")
+            if isinstance(e.__cause__, ConnectionRefusedError) and e.__cause__.errno == 111:
+                logging.error(f"Error 111 occurred while tweeting: {e}")
+                return False
+            else:
+                logging.error(f"Failed to tweet: {e}")
+                return False
 
 
     def run(self):
@@ -172,8 +184,12 @@ class MagalitterBot:
             message = self.format_message(post)
             url = f"{self.domain_name}/{post.get('board')}/res/{post_id}"
 
-            self.post_to_twitter(message)
-            self.post_to_bluesky(message, url=url)
+            twitter_ret = self.post_to_twitter(message)
+            bsky_ret = self.post_to_bluesky(message, url=url)
+            if not twitter_ret or not bsky_ret:
+                logging.info(f"Not saving post ID {post_id} due to error.")
+                continue
+
             self.save_tweeted_post_id(post_id)
 
 if __name__ == "__main__":
