@@ -76,10 +76,10 @@ class MagalitterBot:
                 return set(file.read().splitlines())
         return set()
 
-    def save_tweeted_post_id(self, post_id: int):
+    def save_tweeted_post_id(self, post_id: int, board_dir: str):
         """Save the post ID to avoid future duplication."""
         with open(self.tweeted_post_file, 'a') as file:
-            file.write(f"{post_id}\n")
+            file.write(f"{board_dir}:{post_id}\n")
 
     def fetch_posts(self) -> t.List[dict]:
         """Fetch data from the URL and return posts."""
@@ -168,6 +168,7 @@ class MagalitterBot:
         for post in first_posts:
             post_id = post.get('no')
             post_time = post.get('time')
+            board_dir = post.get('board')
 
             if current_time - post_time < self.time_interval_seconds:
                 logging.info(f"Thread #{post_id} is less than {self.time_interval_hours} hours old. Skipping.")
@@ -177,12 +178,12 @@ class MagalitterBot:
                 logging.info(f"Skipping thread #{post_id}. Sticky: {post.get('sticky')}, Locked: {post.get('locked')}.")
                 continue
 
-            if str(post_id) in tweeted_post_ids:
-                logging.info(f"Thread #{post_id} already tweeted. Skipping.")
+            if str(f"{board_dir}:{post_id}") in tweeted_post_ids:
+                logging.info(f"Thread #{post_id} from {board_dir} already tweeted. Skipping.")
                 continue
 
             message = self.format_message(post)
-            url = f"{self.domain_name}/{post.get('board')}/res/{post_id}"
+            url = f"{self.domain_name}/{board_dir}/res/{post_id}"
 
             twitter_ret = self.post_to_twitter(message)
             bsky_ret = self.post_to_bluesky(message, url=url)
@@ -190,7 +191,7 @@ class MagalitterBot:
                 logging.info(f"Not saving post ID {post_id} due to error.")
                 continue
 
-            self.save_tweeted_post_id(post_id)
+            self.save_tweeted_post_id(post_id, board_dir)
 
 if __name__ == "__main__":
     bot = MagalitterBot()
