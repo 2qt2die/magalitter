@@ -2,6 +2,7 @@ import os
 import logging
 import typing as t
 import httpx
+import asyncio
 import time
 from logging.handlers import RotatingFileHandler
 from atproto_client import exceptions as exceptions_at
@@ -87,15 +88,16 @@ class MagalitterBot:
         with open(plataform_file, 'a') as file:
             file.write(f"{board_dir}:{post_id}\n")
 
-    def fetch_posts(self) -> t.List[dict]:
+    async def fetch_posts(self) -> t.List[dict]:
         """Fetch data from the URL and return posts."""
         try:
-            response = httpx.get(self.url)
-            response.raise_for_status()
-            parsed_data = response.json()
-            first_posts = [thread_group['posts'][0] for thread_group in parsed_data['threads']]
-            logging.info("Fetched posts successfully")
-            return first_posts
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.url)
+                response.raise_for_status()
+                parsed_data = response.json()
+                first_posts = [thread_group['posts'][0] for thread_group in parsed_data['threads']]
+                logging.info("Fetched posts successfully")
+                return first_posts
         except (httpx.HTTPStatusError, httpx.RequestError, JSONDecodeError) as e:
             logging.error(f"Error fetching posts: {e}")
             return []
@@ -115,7 +117,7 @@ class MagalitterBot:
             return self.post_format.format(board=board, sub=f"{sub} -", com=com)
         return self.post_format.replace("{sub}", "").format(board=board, com=com)
 
-    def post_to_bluesky(self, message: str, url: t.Optional[str] = None):
+    async def post_to_bluesky(self, message: str, url: t.Optional[str] = None):
         """Post the message to Bluesky, optionally with media or external resource."""
         if not self.enable_bluesky or not self.bluesky_client:
             logging.info("Bluesky posting is disabled.")
@@ -136,18 +138,14 @@ class MagalitterBot:
         bluesky_content = f"{message}\n\n{hashtag}"
 
         try:
-            self.bluesky_client.send_post(text=bluesky_content, facets=facets, embed=embed)
+            await asyncio.to_thread(self.bluesky_client.send_post, text=bluesky_content, facets=facets, embed=embed)
             logging.info(f"Posted on Bluesky: {bluesky_content}")
             return True
         except Exception as e:
-            if isinstance(e.__cause__, ConnectionRefusedError) and e.__cause__.errno == 111:
-                logging.error(f"Error 111 occurred while posting to Bluesky: {e}")
-                return False
-            else:
-                logging.error(f"Failed to post on Bluesky: {e}")
-                return False 
+            logging.error(f"Failed to post on Bluesky: {e}")
+            return False 
 
-    def post_to_twitter(self, message: str, url: str):
+    async def post_to_twitter(self, message: str, url: str):
         """Post the message to Twitter."""
         if not self.enable_twitter or not self.twitter_api:
             logging.info("Twitter posting is disabled.")
@@ -163,17 +161,12 @@ class MagalitterBot:
         tweet_content = f"{message}{suffix}{hashtag}"
 
         try:
-            response = self.twitter_api.create_tweet(text=tweet_content)
+            await asyncio.to_thread(self.twitter_api.create_tweet, text=tweet_content)
             logging.info(f"Tweeted: {tweet_content}")
-            logging.info(f"Twitter Response: {response}")
             return True
         except TweepyException as e:
-            if isinstance(e.__cause__, ConnectionRefusedError) and e.__cause__.errno == 111:
-                logging.error(f"Error 111 occurred while tweeting: {e}")
-                return False
-            else:
-                logging.error(f"Failed to tweet: {e}")
-                return False
+            logging.error(f"Failed to tweet: {e}")
+            return False
 
     def should_skip_post(self, post_flags: dict, current_time: float) -> bool:
         """Check whether the post should be skipped due to age, stickiness, or lock."""
@@ -188,12 +181,12 @@ class MagalitterBot:
 
         return False
 
-    def post_to_platforms(self, post_id: int, board_dir: str, save_id: str, tweeted_post_ids: set, bluesky_post_ids: set, message: str, url: str):
+    async def post_to_platforms(self, post_id: int, board_dir: str, save_id: str, tweeted_post_ids: set, bluesky_post_ids: set, message: str, url: str):
         """Post to Twitter and Bluesky, and track the post IDs."""
 
         if save_id not in tweeted_post_ids:
             logging.info(f"Attempting to post to Twitter: Thread #{post_id} from board /{board_dir}/")
-            if self.post_to_twitter(message, url=url):
+            if await self.post_to_twitter(message, url=url):
                 self.save_posted_id(post_id, board_dir, self.tweeted_post_file)
             else:
                 logging.info(f"Not saving Thread #{post_id} due to error on Twitter.")
@@ -202,18 +195,18 @@ class MagalitterBot:
 
         if save_id not in bluesky_post_ids:
             logging.info(f"Attempting to post to Bluesky: Thread #{post_id} from board /{board_dir}/")
-            if self.post_to_bluesky(message, url=url):
+            if await self.post_to_bluesky(message, url=url):
                 self.save_posted_id(post_id, board_dir, self.bluesky_post_file)
             else:
                 logging.info(f"Not saving Thread #{post_id} due to error on Bluesky.")
         else:
             logging.info(f"Thread #{post_id} already posted to Bluesky. Skipping Bluesky.")
 
-    def run(self):
+    async def run(self):
         """Main bot logic: fetch posts, tweet and post to Bluesky."""
         tweeted_post_ids = self.get_posted_ids(self.tweeted_post_file)
         bluesky_post_ids = self.get_posted_ids(self.bluesky_post_file)
-        first_posts = self.fetch_posts()
+        first_posts = await self.fetch_posts()
 
         current_time = time.time()
 
@@ -223,6 +216,7 @@ class MagalitterBot:
 
         logging.info(f"Posts fetched: {len(first_posts)} posts")
 
+        tasks = []
         for post in first_posts:
             post_id = post.get('no')
             post_board = post.get('board')
@@ -238,14 +232,14 @@ class MagalitterBot:
 
             save_id = f"{post_board}:{post_id}"
 
-            if self.should_skip_post(post_flags, current_time):
-                continue
+            if not self.should_skip_post(post_flags, current_time):
+                message = self.format_message(post)
+                url = f"{self.domain_name}/{post_board}/res/{post_id}"
 
-            message = self.format_message(post)
-            url = f"{self.domain_name}/{post_board}/res/{post_id}"
+                tasks.append(self.post_to_platforms(post_id, post_board, save_id, tweeted_post_ids, bluesky_post_ids, message, url))
 
-            self.post_to_platforms(post_id, post_board, save_id, tweeted_post_ids, bluesky_post_ids, message, url)
+        await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
     bot = MagalitterBot()
-    bot.run()
+    asyncio.run(bot.run())
