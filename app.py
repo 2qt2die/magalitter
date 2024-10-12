@@ -123,21 +123,16 @@ class MagalitterBot:
 
         embed = None
         hashtag = f"#{self.hashtag_name}"
+        message += f"{hashtag}"
 
         facets = create_hashtag_facet(message, self.hashtag_name)
 
         if url:
             embed = fetch_and_create_ogp_embed(url, self.bluesky_client, self.fallback_image)
 
-        max_message_length = 300 - len(hashtag)
-        if len(message) > max_message_length:
-            message = message[:max_message_length - 3] + '...'
-
-        bluesky_content = f"{message}\n\n{hashtag}"
-
         try:
-            self.bluesky_client.send_post(text=bluesky_content, facets=facets, embed=embed)
-            logging.info(f"Posted on Bluesky: {bluesky_content}")
+            self.bluesky_client.send_post(text=message, facets=facets, embed=embed)
+            logging.info(f"Posted on Bluesky: {message}")
             return True
         except Exception as e:
             if isinstance(e.__cause__, ConnectionRefusedError) and e.__cause__.errno == 111:
